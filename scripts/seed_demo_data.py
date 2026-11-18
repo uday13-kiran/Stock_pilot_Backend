@@ -93,7 +93,7 @@ SUPPLIERS = [
 ]
 
 WAREHOUSES = [
-    {"name": "Pune Central Distribution Centre", "location": "Pune, Maharashtra", "address": "Sector 7, Bhosari MIDC, Pune 411026"},
+    {"name": "Hyderabad Central Distribution Centre", "location": "Hyderabad, Telangana", "address": "Sector 7, Bhosari MIDC, Pune 411026"},
     {"name": "Pune Camp Electronics Store", "location": "Pune, Maharashtra", "address": "M.G. Road, Camp, Pune 411001"},
 ]
 
@@ -150,6 +150,7 @@ def _seed_history(
     warehouses: dict[str, Warehouse],
     suppliers: dict[str, Supplier],
 ) -> bool:
+    print("Checking demo history and preparing historical activity...", flush=True)
     email_values = [customer["email"] for customer in HISTORY_CUSTOMERS]
     history_customers = db.scalars(
         select(Customer)
@@ -173,6 +174,7 @@ def _seed_history(
         )
     )
     if has_history_sales and has_history_purchase_orders:
+        print("Historical demo activity is already present; skipping it.", flush=True)
         return False
     if has_history_sales or has_history_purchase_orders:
         raise RuntimeError(
@@ -237,6 +239,11 @@ def _seed_history(
             "Demo inventory is incomplete; create inventory rows for every demo product and warehouse first."
         )
 
+    print(
+        f"Planning six months of activity for {len(products)} products "
+        f"across {len(warehouse_list)} warehouses...",
+        flush=True,
+    )
     monthly_units: dict[tuple[int, int], tuple[int, ...]] = {}
     for warehouse_index, warehouse in enumerate(warehouse_list):
         for product_index, product in enumerate(products):
@@ -432,9 +439,13 @@ def _seed_history(
             )
             counts["StockTransaction"] = counts.get("StockTransaction", 0) + 1
 
-    for (month_index, warehouse_id, supplier_id), lines in sorted(
+    print("Adding historical purchase orders and goods receipts...", flush=True)
+    receipt_batches = sorted(
         receipt_lines.items(),
         key=lambda entry: (entry[0][0], entry[0][1], entry[0][2]),
+    )
+    for batch_number, ((month_index, warehouse_id, supplier_id), lines) in enumerate(
+        receipt_batches, start=1
     ):
         lines = [(product, quantity) for product, quantity in lines if quantity > 0]
         if not lines:
@@ -512,8 +523,15 @@ def _seed_history(
             counts["PurchaseOrderItem"] = counts.get("PurchaseOrderItem", 0) + 1
             counts["GoodsReceiptItem"] = counts.get("GoodsReceiptItem", 0) + 1
             counts["StockTransaction"] = counts.get("StockTransaction", 0) + 1
+        if batch_number % 3 == 0 or batch_number == len(receipt_batches):
+            print(
+                f"  Purchase/receipt batches: {batch_number}/{len(receipt_batches)}",
+                flush=True,
+            )
 
-    for planned in sorted(planned_sales, key=lambda sale: sale["sale_date"]):
+    print(f"Adding {len(planned_sales)} historical sales...", flush=True)
+    ordered_sales = sorted(planned_sales, key=lambda sale: sale["sale_date"])
+    for sale_number, planned in enumerate(ordered_sales, start=1):
         lines = []
         subtotal = Decimal("0.00")
         tax_total = Decimal("0.00")
@@ -606,6 +624,12 @@ def _seed_history(
             )
         )
         counts["Payment"] = counts.get("Payment", 0) + 1
+        if sale_number % 25 == 0 or sale_number == len(ordered_sales):
+            print(
+                f"  Sales: {sale_number}/{len(ordered_sales)} "
+                f"({sale_number * 100 // len(ordered_sales)}%)",
+                flush=True,
+            )
 
     return True
 
@@ -629,6 +653,7 @@ def _get_or_create(
 
 
 def seed(db: Session) -> dict[str, int]:
+    print("Checking database schema...", flush=True)
     counts: dict[str, int] = {}
     schema = inspect(engine)
     tables = set(schema.get_table_names())
@@ -675,6 +700,10 @@ def seed(db: Session) -> dict[str, int]:
             f"{', '.join(too_long_names)}"
         )
 
+    print(
+        "Preparing categories, brands, units, suppliers, warehouses, and customers...",
+        flush=True,
+    )
     categories = {
         name: _get_or_create(db, Category, "name", name, {"description": description}, counts)[0]
         for name, description in CATEGORIES.items()
@@ -723,7 +752,8 @@ def seed(db: Session) -> dict[str, int]:
         for details in CUSTOMERS
     }
 
-    for item in PRODUCTS:
+    print(f"Adding or checking {len(PRODUCTS)} demo products and inventory...", flush=True)
+    for product_number, item in enumerate(PRODUCTS, start=1):
         product, _ = _get_or_create(
             db,
             Product,
@@ -808,7 +838,14 @@ def seed(db: Session) -> dict[str, int]:
                         )
                     )
                     counts["StockTransaction"] = counts.get("StockTransaction", 0) + 1
+        if product_number % 5 == 0 or product_number == len(PRODUCTS):
+            print(
+                f"  Products and inventory: {product_number}/{len(PRODUCTS)} "
+                f"({product_number * 100 // len(PRODUCTS)}%)",
+                flush=True,
+            )
 
+    print("Preparing historical sales and purchasing data...", flush=True)
     _seed_history(db, counts, warehouses, suppliers)
     return counts
 
@@ -823,12 +860,16 @@ def main() -> None:
     args = parser.parse_args()
     db = SessionLocal()
     try:
+        print("Starting demo data seed...", flush=True)
         counts = seed(db)
         db.flush()
         if args.dry_run:
+            print("Dry run: rolling back previewed changes...", flush=True)
             db.rollback()
         else:
+            print("Committing demo data...", flush=True)
             db.commit()
+            print("Database commit complete.", flush=True)
     except Exception:
         db.rollback()
         raise

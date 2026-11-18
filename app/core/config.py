@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "fK-0gf7XawrKd9UdMSPGrG2JMzgxpgFTYlAumZ1Fq5PyuuYSeg-DKq-jZKdTgARq"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://172.20.10.3:5173"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://172.20.10.3:5173,https://stock-pilot-frontend-six.vercel.app"
     mongodb_url: str | None = None
     mongodb_database: str = "stockpilot"
     llm_api_key: str | None = None
