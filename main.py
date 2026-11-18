@@ -54,7 +54,13 @@ async def lifespan(application: FastAPI):
     yield
 
 app = FastAPI(title=settings.app_name, version="1.0.0", debug=settings.debug, lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["https://stock-pilot-frontend-six.vercel.app/"], allow_credentials=True, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Route-level access is enforced by database-assigned roles. Admin bypasses all business
 # role lists through require_roles(); identity administration remains admin-only.
 def include_for_roles(api_router, roles):
